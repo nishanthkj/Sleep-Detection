@@ -1,78 +1,107 @@
-# Eye Closure Detection with Alarm
+# Eye Closure Detection System
 
-This project detects eye closure using a webcam and sounds an alarm if the eyes remain closed for a specified duration. The detection is based on the Eye Aspect Ratio (EAR) calculated from facial landmarks.
+## Overview
 
-## Requirements
+This project is a real-time eye closure detection system that uses a webcam feed to monitor eye closures. It calculates the Eye Aspect Ratio (EAR) to determine if the eyes are closed and triggers an alarm if they remain closed for a specified number of consecutive frames. This can be useful for detecting drowsiness in drivers, ensuring alertness in security personnel, and various other applications.
 
-To run this project, you need to install the following libraries:
+## Project Structure
 
-- OpenCV
-- dlib
-- NumPy
-- SciPy
-
-## Installation
-
-### Step 1: Create a Virtual Environment
-
-Creating a virtual environment is recommended to manage dependencies and avoid conflicts.
-
-```sh
-# Create a virtual environment
-python -m venv ear_detection_env
-
-# Activate the virtual environment
-# On Windows
-ear_detection_env\Scripts\activate
-
-# On macOS/Linux
-source ear_detection_env/bin/activate
+```
+Sleep_Detection/
+│
+├── models/
+│   └── shape_predictor_68_face_landmarks.dat
+│
+├── eye_closure_detection.py
+├── requirements.txt
+└── README.md
 ```
 
-### Step 2: Install Required Libraries
+## Files Description
 
-Install the necessary libraries using `pip`.
+- **models/shape_predictor_68_face_landmarks.dat**: The pre-trained dlib shape predictor model file.
+- **eye_closure_detection.py**: The main Python script for real-time eye closure detection.
+- **requirements.txt**: List of dependencies required for the project.
+- **README.md**: Documentation for the project.
 
-```sh
-# Install OpenCV for computer vision tasks
-pip install opencv-python
+## Setup Instructions
 
-# Install dlib for machine learning and computer vision tasks
-pip install dlib
+### Prerequisites
 
-# Install NumPy for numerical operations
-pip install numpy
+- Python 3.12
 
-# Install SciPy for spatial distance calculations
-pip install scipy
-```
+### Installation
 
-### Step 3: Download the Shape Predictor Model
+1. **Clone the repository**:
+    ```bash
+    git clone https://github.com/nishanthkj/Sleep_Detection
+    cd Sleep_Detection
+    ```
 
-Download the `shape_predictor_68_face_landmarks.dat` file from [dlib's model zoo](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2).
+2. **Create a virtual environment**:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    ```
 
-Extract the file if it is compressed (e.g., `.bz2`), and place the `.dat` file in the same directory as your script or provide the correct path to the file.
+3. **Install the required packages**:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-## Script
+4. **Download the shape predictor model**:
+    - Download `shape_predictor_68_face_landmarks.dat` from the [dlib model zoo](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2) and place it in the `models` directory.
 
-Save the following script as `eye_closure_detection.py`:
+## Usage
+
+1. **Run the eye closure detection script**:
+    ```bash
+    python eye_closure_detection.py
+    ```
+
+2. **Allow webcam access**:
+    - The script will access your webcam. Ensure you have a working webcam connected.
+
+3. **Monitor the output**:
+    - The script will display the webcam feed and highlight detected faces and eye regions. It will trigger an alarm if the eyes remain closed for the specified number of consecutive frames.
+
+## Code Explanation
+
+### `eye_closure_detection.py`
+
+This is the main Python script for real-time eye closure detection.
 
 ```python
-import cv2  # OpenCV library for computer vision tasks
-import dlib  # Dlib library for machine learning and computer vision tasks
-import numpy as np  # NumPy library for numerical operations
-from scipy.spatial import distance as dist  # Scipy library for spatial distance calculations
-import winsound  # For alarm sound on Windows
+"""
+This module detects eye closure in real-time using a webcam feed. It calculates the
+Eye Aspect Ratio (EAR) to determine if the eyes are closed and triggers an alarm if
+they remain closed for a specified number of consecutive frames. This can be useful
+for detecting drowsiness in drivers, ensuring alertness in security personnel, and
+various other applications.
+"""
 
+import winsound  # Standard import should be first
+import cv2  # pylint: disable=import-error
+import dlib  # pylint: disable=import-error
+import numpy as np
+from scipy.spatial import distance as dist  # pylint: disable=import-error
+
+# Function to calculate the Eye Aspect Ratio (EAR)
 def eye_aspect_ratio(eye):
     """
-    Calculate the Eye Aspect Ratio (EAR).
+    Calculate the Eye Aspect Ratio (EAR) for a given eye.
+    
+    Parameters:
+    eye (numpy.ndarray): Array of coordinates for the eye landmarks.
+    
+    Returns:
+    float: The calculated EAR value.
     """
-    a = dist.euclidean(eye[1], eye[5])
-    b = dist.euclidean(eye[2], eye[4])
-    c = dist.euclidean(eye[0], eye[3])
-    ear = (a + b) / (2.0 * c)
-    return ear
+    dist_a = dist.euclidean(eye[1], eye[5])
+    dist_b = dist.euclidean(eye[2], eye[4])
+    dist_c = dist.euclidean(eye[0], eye[3])
+    aspect_ratio = (dist_a + dist_b) / (2.0 * dist_c)
+    return aspect_ratio
 
 # Constants for EAR threshold and consecutive frames
 EAR_THRESHOLD = 0.25
@@ -83,59 +112,52 @@ COUNTER = 0
 ALARM_ON = False
 
 # Load the pre-trained face detector and shape predictor
-detector = dlib.get_frontal_face_detector()  # Initialize dlib's face detector
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")  # Update this path if necessary
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+try:
+    predictor = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")  # pylint: disable=no-member
+except RuntimeError as e:
+    print(f"Error loading shape predictor: {e}")
+    exit()
 
 # Grab the indexes of the facial landmarks for the left and right eye
-(lStart, lEnd) = (42, 48)
-(rStart, rEnd) = (36, 42)
+(L_START, L_END) = (42, 48)
+(R_START, R_END) = (36, 42)
 
 # Start the video stream
-cap = cv2.VideoCapture(0)  # Open the default camera
+cap = cv2.VideoCapture(0)  # pylint: disable=no-member
 
 try:
     while True:
-        ret, frame = cap.read()  # Capture frame-by-frame
+        ret, frame = cap.read()
         if not ret or frame is None:
             print("Failed to capture frame")
             break
 
         # Convert the frame to grayscale
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert the frame to grayscale
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
 
-        # Ensure the image is 8-bit
+        # Ensure the grayscale image is 8-bit
         if gray.dtype != np.uint8:
-            gray = gray.astype(np.uint8)
+            gray = gray.astype('uint8')
 
-        # Check if the image is not empty
-        if gray is None or gray.size == 0:
-            print("Empty frame detected")
-            continue
+        # Detect faces
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
 
-        # Detect faces in the grayscale frame
-        rects = detector(gray, 0)
-
-        # Loop over the face detections
-        for rect in rects:
-            # Determine the facial landmarks for the face region
+        for (x, y, w, h) in faces:
+            rect = dlib.rectangle(int(x), int(y), int(x + w), int(y + h))  # pylint: disable=no-member
             shape = predictor(gray, rect)
             shape = np.array([[p.x, p.y] for p in shape.parts()])
 
-            # Extract the left and right eye coordinates
-            leftEye = shape[lStart:lEnd]
-            rightEye = shape[rStart:rEnd]
-            # Calculate the EAR for both eyes
-            leftEAR = eye_aspect_ratio(leftEye)
-            rightEAR = eye_aspect_ratio(rightEye)
+            left_eye = shape[L_START:L_END]
+            right_eye = shape[R_START:R_END]
+            left_ear = eye_aspect_ratio(left_eye)
+            right_ear = eye_aspect_ratio(right_eye)
 
-            # Average the EAR for both eyes
-            ear = (leftEAR + rightEAR) / 2.0
+            ear = (left_ear + right_ear) / 2.0
 
-            # Check if the EAR is below the blink threshold
             if ear < EAR_THRESHOLD:
                 COUNTER += 1
 
-                # If the eyes were closed for a sufficient number of frames, sound the alarm
                 if COUNTER >= EAR_CONSEC_FRAMES:
                     if not ALARM_ON:
                         ALARM_ON = True
@@ -144,37 +166,38 @@ try:
                 COUNTER = 0
                 ALARM_ON = False
 
-            # Draw the eye regions
-            for (x, y) in np.concatenate((leftEye, rightEye), axis=0):
-                cv2.circle(frame, (x, y), 2, (0, 255, 0), -1)  # Draw circles around the eye landmarks
+            # Draw the face bounding box and eye regions
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)  # pylint: disable=no-member
+            for (ex, ey) in np.concatenate((left_eye, right_eye), axis=0):
+                cv2.circle(frame, (ex, ey), 2, (0, 255, 0), -1)  # pylint: disable-no-member
 
-        # Display the resulting frame
-        cv2.imshow("Frame", frame)  # Show the frame in a window
-        if cv2.waitKey(1) & 0xFF == ord('q'):  # Exit the loop when 'q' is pressed
+        cv2.imshow("Frame", frame)  # pylint: disable=no-member
+        if cv2.waitKey(1) & 0xFF == ord('q'):  # pylint: disable-no-member
             break
 
 except KeyboardInterrupt:
     print("Interrupted by user")
 
 finally:
-    # Release the capture and close any OpenCV windows
     cap.release()
-    cv2.destroyAllWindows()  # Close all OpenCV windows
+    cv2.destroyAllWindows()  # pylint: disable-no-member
 ```
 
-## Running the Script
+### `requirements.txt`
 
-To run the script, use the following command:
+This file lists all the dependencies required for the project.
 
-```sh
-python eye_closure_detection.py
+```
+cmake==3.30.0
+dlib @ file:///D:/Projects/Python/Sleep%20Detection/dlib-19.24.99-cp312-cp312-win_amd64.whl#sha256=20c62e606ca4c9961305f7be3d03990380d3e6c17f8d27798996e97a73271862
+numpy==1.26.4
+opencv-python==4.10.0.84
+PyOpenGL==3.1.7
+scipy==1.14.0
 ```
 
-Make sure to replace `"shape_predictor_68_face_landmarks.dat"` with the actual path to the `.dat` file if it is not in the same directory as your script.
+## Conclusion
 
-## Notes
+This documentation provides a comprehensive guide to setting up and running the Eye Closure Detection System. By following the steps outlined, you should be able to deploy the application and monitor eye closures in real-time. If you encounter any issues, ensure that all dependencies are installed and that the model file is correctly placed in the `models` directory.
 
-- Ensure your webcam is properly connected and accessible.
-- Adjust the `EAR_THRESHOLD` and `EAR_CONSEC_FRAMES` constants if necessary to better suit your needs.
-- The alarm sound is generated using the `winsound` library, which is specific to Windows. If you are using a different operating system, you may need to use an alternative method for generating the alarm sound.
-```
+Feel free to customize and enhance the functionality as per your requirements. This project serves as a foundational implementation for real-time eye closure detection.
